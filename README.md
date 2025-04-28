@@ -1,2 +1,3 @@
 # Koha-theme
-Better Discord
+Better Discord、個人用テーマのために作成
+あとは見ればわかる
