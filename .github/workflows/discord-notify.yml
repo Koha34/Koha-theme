@@ -1,28 +1,26 @@
-name: Discord Notify               # ワークフロー名（Actions タブに表示）
+name: Discord Notify
 
-# ===== トリガー =====
 on:
-  push:                            # Push イベント
-    branches: [ main ]             #   → main ブランチだけ対象
-  pull_request:                    # PR イベント
-    types: [ opened, closed ]      #   → 作成とマージ時
-  release:                         # Release イベント
-    types: [ published ]           #   → 新規リリース時
+  push:
+    branches: [ main ]              # main への Push
+  pull_request:
+    types: [opened, closed]         # PR 作成・マージ
+  release:
+    types: [published]              # Release 公開
 
-# ===== ジョブ定義 =====
 jobs:
   notify:
-    runs-on: ubuntu-latest  
+    runs-on: ubuntu-latest
 
     steps:
-    # 必要ならコードをチェックアウト (diff 用)
+    # ① コードを取得（差分情報用）
     - name: Checkout
       uses: actions/checkout@v4
 
+    # ② Discord 用 JSON を生成
     - name: Assemble Discord Message
       id: build
       run: |
-        # ------ イベントに応じてメッセージを組み立て ------
         if [[ "${{ github.event_name }}" == "push" ]]; then
           EVENT="🔄 **Push** to \`${{ github.ref_name }}\`"
           URL="${{ github.event.compare }}"
@@ -45,17 +43,23 @@ jobs:
           DESCRIPTION="${{ github.event.release.name }}"
         fi
 
+        # jq で Embed JSON を作成
         jq -n --arg title "$EVENT" \
               --arg url "$URL" \
               --arg desc "$DESCRIPTION" \
               --arg color "$COLOR" \
         '{embeds:[{title:$title,url:$url,description:$desc,color:($color|tonumber)}]}' > discordmsg.json
 
+        # マルチライン出力で次ステップへ渡す
+        echo "payload<<EOF" >> $GITHUB_OUTPUT
+        cat discordmsg.json >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    # ③ Discord Webhook へ POST
     - name: Post to Discord Webhook
-      uses: fjogeleit/http-request-action@v1     
+      uses: fjogeleit/http-request-action@v1
       with:
-        url: ${{ secrets.DISCORD_WEBHOOK_URL }} 
+        url: ${{ secrets.DISCORD_WEBHOOK_URL }}   # ②で登録した Secret
         method: 'POST'
         contentType: 'application/json'
-        dataFile: 'discordmsg.json'
-
+        data: ${{ steps.build.outputs.payload }}  # JSON を直接渡す
