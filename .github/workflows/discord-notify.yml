@@ -1,1 +1,61 @@
+name: Discord Notify               # ワークフロー名（Actions タブに表示）
+
+# ===== トリガー =====
+on:
+  push:                            # Push イベント
+    branches: [ main ]             #   → main ブランチだけ対象
+  pull_request:                    # PR イベント
+    types: [ opened, closed ]      #   → 作成とマージ時
+  release:                         # Release イベント
+    types: [ published ]           #   → 新規リリース時
+
+# ===== ジョブ定義 =====
+jobs:
+  notify:
+    runs-on: ubuntu-latest  
+
+    steps:
+    # 必要ならコードをチェックアウト (diff 用)
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Assemble Discord Message
+      id: build
+      run: |
+        # ------ イベントに応じてメッセージを組み立て ------
+        if [[ "${{ github.event_name }}" == "push" ]]; then
+          EVENT="🔄 **Push** to \`${{ github.ref_name }}\`"
+          URL="${{ github.event.compare }}"
+          COLOR="3447003"
+          DESCRIPTION="$(git log -1 --pretty=format:'%s (%an)')"
+        elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          if [[ "${{ github.event.action }}" == "closed" && "${{ github.event.pull_request.merged }}" == "true" ]]; then
+            EVENT="✅ **PR Merged** #${{ github.event.pull_request.number }}"
+            COLOR="5763719"
+          else
+            EVENT="📣 **PR Opened** #${{ github.event.pull_request.number }}"
+            COLOR="16753920"
+          fi
+          URL="${{ github.event.pull_request.html_url }}"
+          DESCRIPTION="${{ github.event.pull_request.title }}"
+        else
+          EVENT="🏷️ **Release** \`${{ github.event.release.tag_name }}\`"
+          URL="${{ github.event.release.html_url }}"
+          COLOR="15844367"
+          DESCRIPTION="${{ github.event.release.name }}"
+        fi
+
+        jq -n --arg title "$EVENT" \
+              --arg url "$URL" \
+              --arg desc "$DESCRIPTION" \
+              --arg color "$COLOR" \
+        '{embeds:[{title:$title,url:$url,description:$desc,color:($color|tonumber)}]}' > discordmsg.json
+
+    - name: Post to Discord Webhook
+      uses: fjogeleit/http-request-action@v1     
+      with:
+        url: ${{ secrets.DISCORD_WEBHOOK_URL }} 
+        method: 'POST'
+        contentType: 'application/json'
+        dataFile: 'discordmsg.json'
 
