@@ -2,64 +2,80 @@ name: Discord Notify
 
 on:
   push:
-    branches: [ main ]              # main への Push
+    branches: [ main ]
   pull_request:
-    types: [opened, closed]         # PR 作成・マージ
+    types: [opened, closed]
   release:
-    types: [published]              # Release 公開
+    types: [published]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
 
     steps:
-    # ① コードを取得（差分情報用）
     - name: Checkout
       uses: actions/checkout@v4
 
-    # ② Discord 用 JSON を生成
     - name: Assemble Discord Message
       id: build
+      env:
+        GH_EVENT: ${{ toJson(github) }}
       run: |
+        # ---------- Push ----------
         if [[ "${{ github.event_name }}" == "push" ]]; then
-          EVENT="🔄 **Push** to \`${{ github.ref_name }}\`"
+          # 先頭コミットを取得（通常1件）
+          SHA="${{ github.event.head_commit.id }}"
+          SHORTSHA="${SHA::7}"
+          AUTHOR="${{ github.event.head_commit.author.username }}"
+          MSG="$(echo "${{ github.event.head_commit.message }}" | head -n1)"
+
+          # 変更ファイル名（最初の1つを表示、複数なら+α）
+          FILES=$(jq -r '.head_commit.modified + .head_commit.added + .head_commit.removed | @sh' <<<"$GH_EVENT" | tr -d "'")
+          IFS=' ' read -r FIRST REST <<< "$FILES"
+          if [[ -n "$REST" ]]; then
+            FILE_LABEL="${FIRST} 他"
+          else
+            FILE_LABEL="$FIRST"
+          fi
+
+          TITLE="🔄 **Push** to \`${{ github.ref_name }}\`"
+          DESCRIPTION="${AUTHOR} が ${FILE_LABEL}・${SHORTSHA} を変更しました！\n変更内容：${MSG}"
           URL="${{ github.event.compare }}"
           COLOR="3447003"
-          DESCRIPTION="$(git log -1 --pretty=format:'%s (%an)')"
+        # ---------- Pull Request ----------
         elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
           if [[ "${{ github.event.action }}" == "closed" && "${{ github.event.pull_request.merged }}" == "true" ]]; then
-            EVENT="✅ **PR Merged** #${{ github.event.pull_request.number }}"
+            TITLE="✅ **PR Merged** #${{ github.event.pull_request.number }}"
             COLOR="5763719"
           else
-            EVENT="📣 **PR Opened** #${{ github.event.pull_request.number }}"
+            TITLE="📣 **PR Opened** #${{ github.event.pull_request.number }}"
             COLOR="16753920"
           fi
-          URL="${{ github.event.pull_request.html_url }}"
           DESCRIPTION="${{ github.event.pull_request.title }}"
+          URL="${{ github.event.pull_request.html_url }}"
+        # ---------- Release ----------
         else
-          EVENT="🏷️ **Release** \`${{ github.event.release.tag_name }}\`"
+          TITLE="🏷️ **Release** \`${{ github.event.release.tag_name }}\`"
+          DESCRIPTION="${{ github.event.release.name }}"
           URL="${{ github.event.release.html_url }}"
           COLOR="15844367"
-          DESCRIPTION="${{ github.event.release.name }}"
         fi
 
-        # jq で Embed JSON を作成
-        jq -n --arg title "$EVENT" \
+        # ---------- JSON Embed ----------
+        jq -n --arg title "$TITLE" \
               --arg url "$URL" \
               --arg desc "$DESCRIPTION" \
               --arg color "$COLOR" \
         '{embeds:[{title:$title,url:$url,description:$desc,color:($color|tonumber)}]}' > discordmsg.json
 
-        # マルチライン出力で次ステップへ渡す
         echo "payload<<EOF" >> $GITHUB_OUTPUT
         cat discordmsg.json >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
-    # ③ Discord Webhook へ POST
     - name: Post to Discord Webhook
       uses: fjogeleit/http-request-action@v1
       with:
-        url: ${{ secrets.DISCORD_WEBHOOK_URL }}   # ②で登録した Secret
+        url: ${{ secrets.DISCORD_WEBHOOK_URL }}
         method: 'POST'
         contentType: 'application/json'
-        data: ${{ steps.build.outputs.payload }}  # JSON を直接渡す
+        data: ${{ steps.build.outputs.payload }}
