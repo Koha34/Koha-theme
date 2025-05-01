@@ -10,6 +10,8 @@
 /* IMPORT CSS */
 @import url("https://clearvision.github.io/ClearVision-v7/main.css");
 @import url("https://clearvision.github.io/ClearVision-v7/betterdiscord.css");
+@import url("https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap");
+
 /* SETTINGS */
 :root {
   /* ACCENT COLORS */
@@ -39,7 +41,7 @@
   /* HOME ICON */
   --home-icon: url(https://clearvision.github.io/icons/discord.svg);
   /* FONTS */
-  --main-font: "gg sans", Whitney, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --main-font: "Klee One", Whitney, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --code-font: Consolas, "gg mono", "Liberation Mono", Menlo, Courier, monospace;
 }
 
