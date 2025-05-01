@@ -25,7 +25,7 @@
   --offline-color: #808080;
   /* APP BACKGROUND */
   --background-shading-percent: 100%;
-  --background-image: url(https://clearvision.github.io/images/sapphire.jpg);
+  --background-image: url(https://raw.githubusercontent.com/Koha34/Koha-theme/refs/heads/main/assets/wallpaper.jpg);
   --background-attachment: fixed;
   --background-filter: saturate(calc(var(--saturation-factor, 1) * 1));
   /* USER POPOUT BACKGROUND */
